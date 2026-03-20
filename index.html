@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Track distance walked using GPS" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <title>WalkTracker</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0f172a;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2rem 1rem 3rem;
+      overflow: hidden;
+    }
+
+    .header {
+      text-align: center;
+      width: 100%;
+    }
+
+    .header h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #94a3b8;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .status-bar {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-top: 0.4rem;
+      min-height: 1.2em;
+    }
+
+    .status-bar.active { color: #22c55e; }
+    .status-bar.warning { color: #f59e0b; }
+    .status-bar.error { color: #ef4444; }
+
+    .main-display {
+      text-align: center;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .distance-value {
+      font-size: 5rem;
+      font-weight: 700;
+      line-height: 1;
+      color: #f1f5f9;
+      font-variant-numeric: tabular-nums;
+      transition: color 0.3s;
+    }
+
+    .distance-value.tracking { color: #22c55e; }
+
+    .distance-unit {
+      font-size: 1.5rem;
+      color: #64748b;
+      font-weight: 400;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 2rem;
+      margin-top: 1.5rem;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.2rem;
+    }
+
+    .accuracy-badge {
+      font-size: 0.72rem;
+      color: #475569;
+      margin-top: 1rem;
+    }
+
+    .accuracy-badge span {
+      color: #64748b;
+    }
+
+    .gps-info {
+      font-size: 0.68rem;
+      color: #475569;
+      text-align: center;
+      line-height: 1.8;
+      margin-top: 0.5rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .gps-info .gps-label {
+      color: #334155;
+      text-transform: uppercase;
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+    }
+
+    .gps-info .gps-coord {
+      color: #64748b;
+    }
+
+    .gps-info .gps-coord.highlight {
+      color: #22c55e;
+    }
+
+    .warning-banner {
+      background: #1e293b;
+      border: 1px solid #f59e0b33;
+      border-radius: 0.75rem;
+      padding: 0.6rem 1rem;
+      font-size: 0.72rem;
+      color: #f59e0b;
+      text-align: center;
+      max-width: 320px;
+      line-height: 1.5;
+    }
+
+    .btn-start {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      box-shadow: 0 0 0 0 #22c55e55;
+      transition: transform 0.15s, box-shadow 0.3s;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+    }
+
+    .btn-start:active { transform: scale(0.95); }
+
+    .btn-start.tracking {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      box-shadow: 0 0 0 8px #ef444422;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 #ef444444; }
+      70%  { box-shadow: 0 0 0 16px #ef444400; }
+      100% { box-shadow: 0 0 0 0 #ef444400; }
+    }
+
+    .btn-start.disabled {
+      background: #1e293b;
+      color: #475569;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>WalkTracker</h1>
+    <div class="status-bar" id="statusBar">Requesting location access...</div>
+  </div>
+
+  <div class="main-display">
+    <div class="distance-value" id="distanceValue">0.00</div>
+    <div class="distance-unit" id="distanceUnit">metres</div>
+
+    <div class="stats-row">
+      <div class="stat">
+        <div class="stat-value" id="timeValue">00:00</div>
+        <div class="stat-label">Duration</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="stepsValue">0</div>
+        <div class="stat-label">GPS Points</div>
+      </div>
+    </div>
+
+    <div class="accuracy-badge">GPS accuracy: <span id="accuracyValue">--</span> m</div>
+
+    <div class="gps-info">
+      <div><span class="gps-label">Current GPS</span><br>
+        <span class="gps-coord" id="currentCoord">--</span>
+      </div>
+      <div style="margin-top:0.4rem"><span class="gps-label">Last accepted pair (added distance)</span><br>
+        <span class="gps-coord" id="lastPairFrom">--</span><br>
+        <span class="gps-coord highlight" id="lastPairTo">--</span>
+      </div>
+    </div>
+
+    <div class="warning-banner" id="warningBanner">
+      Keep this app open for accurate tracking. Minimising may cause gaps in distance data.
+    </div>
+  </div>
+
+  <button class="btn-start disabled" id="btnStart" disabled>START</button>
+
+  <script>
+    // --- State ---
+    let tracking = false;
+    let watchId = null;
+    let wakeLock = null;
+    let totalDistance = 0;
+    let lastPosition = null;  // last ACCEPTED position (used as base for next segment)
+    let isFirstPosition = true; // flag: first position after START just anchors, adds nothing
+    let gpsPoints = 0;
+    let startTime = null;
+    let timerInterval = null;
+    const MIN_DISTANCE_THRESHOLD = 5; // metres — filters GPS jitter
+    const MAX_ACCURACY = 50;          // metres — ignore readings worse than this
+
+    // --- DOM ---
+    const btnStart = document.getElementById('btnStart');
+    const statusBar = document.getElementById('statusBar');
+    const distanceValue = document.getElementById('distanceValue');
+    const distanceUnit = document.getElementById('distanceUnit');
+    const timeValue = document.getElementById('timeValue');
+    const stepsValue = document.getElementById('stepsValue');
+    const accuracyValue = document.getElementById('accuracyValue');
+    const currentCoord = document.getElementById('currentCoord');
+    const lastPairFrom = document.getElementById('lastPairFrom');
+    const lastPairTo = document.getElementById('lastPairTo');
+
+    // --- Haversine formula: returns distance in metres between two lat/lng points ---
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371000; // Earth radius in metres
+      const toRad = d => d * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function formatDistance(metres) {
+      if (metres >= 1000) {
+        distanceUnit.textContent = 'km';
+        return (metres / 1000).toFixed(2);
+      }
+      distanceUnit.textContent = 'metres';
+      return metres.toFixed(1);
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+      const s = (seconds % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function setStatus(msg, type = '') {
+      statusBar.textContent = msg;
+      statusBar.className = 'status-bar ' + type;
+    }
+
+    function fmtCoord(lat, lon) {
+      return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
+
+    // --- Geolocation callback ---
+    function onPosition(pos) {
+      const { latitude, longitude, accuracy } = pos.coords;
+      accuracyValue.textContent = Math.round(accuracy);
+      currentCoord.textContent = fmtCoord(latitude, longitude);
+
+      if (!tracking) return;
+
+      // First position after START: anchor only, add zero distance
+      if (isFirstPosition) {
+        lastPosition = { lat: latitude, lon: longitude };
+        isFirstPosition = false;
+        setStatus('Tracking active', 'active');
+        return;
+      }
+
+      // Ignore poor accuracy readings
+      if (accuracy > MAX_ACCURACY) return;
+
+      const dist = haversine(lastPosition.lat, lastPosition.lon, latitude, longitude);
+
+      if (dist >= MIN_DISTANCE_THRESHOLD) {
+        // Update the "last accepted pair" display
+        lastPairFrom.textContent = fmtCoord(lastPosition.lat, lastPosition.lon);
+        lastPairTo.textContent = fmtCoord(latitude, longitude);
+
+        totalDistance += dist;
+        gpsPoints++;
+        distanceValue.textContent = formatDistance(totalDistance);
+        stepsValue.textContent = gpsPoints;
+
+        // Move anchor forward to this accepted point
+        lastPosition = { lat: latitude, lon: longitude };
+      }
+      // If dist < threshold: don't update lastPosition — keep accumulating from same anchor
+    }
+
+    function onError(err) {
+      setStatus('Location error: ' + err.message, 'error');
+    }
+
+    // --- Wake Lock ---
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => {
+            if (tracking) setStatus('Screen lock released — tracking may be affected', 'warning');
+          });
+        } catch (e) {
+          // Wake lock not critical, continue without it
+        }
+      }
+    }
+
+    async function releaseWakeLock() {
+      if (wakeLock) {
+        await wakeLock.release();
+        wakeLock = null;
+      }
+    }
+
+    // --- Notification ---
+    async function showNotification() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+      if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        reg.showNotification('WalkTracker Running', {
+          body: 'Tracking your walk. Keep Chrome open for best accuracy.',
+          icon: 'icon-192.png',
+          tag: 'walktracker',
+          renotify: false,
+          silent: true
+        });
+      }
+    }
+
+    async function clearNotification() {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        const notifications = await reg.getNotifications({ tag: 'walktracker' });
+        notifications.forEach(n => n.close());
+      }
+    }
+
+    // --- Start / Stop ---
+    async function startTracking() {
+      tracking = true;
+      totalDistance = 0;
+      lastPosition = null;
+      isFirstPosition = true;
+      gpsPoints = 0;
+      startTime = Date.now();
+
+      btnStart.textContent = 'STOP';
+      btnStart.classList.add('tracking');
+      distanceValue.classList.add('tracking');
+      distanceValue.textContent = '0.0';
+      distanceUnit.textContent = 'metres';
+      lastPairFrom.textContent = '--';
+      lastPairTo.textContent = '--';
+      setStatus('Tracking active — acquiring first point...', 'active');
+
+      watchId = navigator.geolocation.watchPosition(onPosition, onError, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000
+      });
+
+      timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        timeValue.textContent = formatTime(elapsed);
+      }, 1000);
+
+      await requestWakeLock();
+      await showNotification();
+    }
+
+    async function stopTracking() {
+      tracking = false;
+
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+
+      clearInterval(timerInterval);
+      timerInterval = null;
+
+      btnStart.textContent = 'START';
+      btnStart.classList.remove('tracking');
+      distanceValue.classList.remove('tracking');
+      setStatus(`Stopped. Total: ${formatDistance(totalDistance)} ${distanceUnit.textContent}`, '');
+
+      await releaseWakeLock();
+      await clearNotification();
+    }
+
+    btnStart.addEventListener('click', () => {
+      if (btnStart.disabled) return;
+      tracking ? stopTracking() : startTracking();
+    });
+
+    // --- Re-acquire wake lock if screen wakes back up ---
+    document.addEventListener('visibilitychange', async () => {
+      if (tracking && document.visibilityState === 'visible' && (!wakeLock || wakeLock.released)) {
+        await requestWakeLock();
+      }
+    });
+
+    // --- Init: request location on load ---
+    function init() {
+      if (!('geolocation' in navigator)) {
+        setStatus('Geolocation not supported', 'error');
+        return;
+      }
+
+      setStatus('Requesting location access...', '');
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          accuracyValue.textContent = Math.round(pos.coords.accuracy);
+          setStatus('Location ready. Press START to begin.', 'active');
+          btnStart.classList.remove('disabled');
+          btnStart.disabled = false;
+        },
+        (err) => {
+          if (err.code === 1) {
+            setStatus('Location permission denied. Please allow in browser settings.', 'error');
+          } else {
+            setStatus('Could not get location. Check GPS signal.', 'error');
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000 }
+      );
+
+      // Register service worker
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
